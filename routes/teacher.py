@@ -156,13 +156,24 @@ def get_classrooms():
 @jwt_required()
 def course_attendance():
     data = request.json
+
     course_id = data.get("course_id")
     date = data.get("date")
     student_id = data.get("student_id")
 
+    # ✅ CLEAN INPUTS
+    if date == "" or date is None:
+        date = None
+
+    if student_id:
+        student_id = student_id.strip()
+        if student_id == "":
+            student_id = None
+
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
+    # ---------------- BASE QUERY ----------------
     query = """
         SELECT s.student_id, s.name, a.status, cs.session_date
         FROM attendance a
@@ -173,6 +184,7 @@ def course_attendance():
 
     params = [course_id]
 
+    # ---------------- FILTERS ----------------
     if date:
         query += " AND cs.session_date = %s"
         params.append(date)
@@ -183,14 +195,18 @@ def course_attendance():
 
     query += " ORDER BY cs.session_date DESC"
 
+    print("DEBUG QUERY:", query)
+    print("DEBUG PARAMS:", params)
+
     cur.execute(query, params)
     records = cur.fetchall()
 
+    # ---------------- SUMMARY ----------------
     total = len(records)
     present = sum(1 for r in records if r["status"] == "PRESENT")
     absent = total - present
 
-    # ✅ FIXED: force float
+    # ---------------- STUDENT STATS ----------------
     cur.execute("""
         SELECT s.student_id, s.name,
         COALESCE(
@@ -206,7 +222,7 @@ def course_attendance():
 
     student_stats = cur.fetchall()
 
-    # 🔥 FORCE PYTHON FLOAT (IMPORTANT)
+    # ✅ FORCE FLOAT
     for s in student_stats:
         s["percentage"] = float(s["percentage"])
 
