@@ -1,0 +1,5 @@
+flask
+flask-jwt-extended
+numpy
+gunicorn
+psycopg2-binary
