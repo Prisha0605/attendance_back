@@ -190,18 +190,25 @@ def course_attendance():
     present = sum(1 for r in records if r["status"] == "PRESENT")
     absent = total - present
 
-    # student-wise percentage
+    # ✅ FIXED: force float
     cur.execute("""
         SELECT s.student_id, s.name,
-        SUM(CASE WHEN a.status='PRESENT' THEN 1 ELSE 0 END)*100.0 / COUNT(*) as percentage
+        COALESCE(
+            SUM(CASE WHEN a.status='PRESENT' THEN 1 ELSE 0 END) * 100.0 
+            / NULLIF(COUNT(*), 0),
+        0) AS percentage
         FROM attendance a
         JOIN student s ON a.student_id = s.student_id
         JOIN class_session cs ON a.session_id = cs.session_id
         WHERE cs.course_id = %s
-        GROUP BY s.student_id
+        GROUP BY s.student_id, s.name
     """, (course_id,))
 
     student_stats = cur.fetchall()
+
+    # 🔥 FORCE PYTHON FLOAT (IMPORTANT)
+    for s in student_stats:
+        s["percentage"] = float(s["percentage"])
 
     conn.close()
 
