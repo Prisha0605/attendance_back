@@ -161,19 +161,16 @@ def course_attendance():
     date = data.get("date")
     student_id = data.get("student_id")
 
-    # ✅ CLEAN INPUTS
-    if date == "" or date is None:
-        date = None
-
+    # ✅ CLEAN INPUT
+    if date:
+        date = date.strip()
     if student_id:
         student_id = student_id.strip()
-        if student_id == "":
-            student_id = None
 
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    # ---------------- BASE QUERY ----------------
+    # ---------------- SIMPLE QUERY (LIKE YOUR JS VERSION) ----------------
     query = """
         SELECT s.student_id, s.name, a.status, cs.session_date
         FROM attendance a
@@ -184,19 +181,19 @@ def course_attendance():
 
     params = [course_id]
 
-    # ---------------- FILTERS ----------------
+    # ✅ FILTER BY DATE
     if date:
         query += " AND cs.session_date = %s"
         params.append(date)
 
+    # ✅ FILTER BY STUDENT
     if student_id:
         query += " AND s.student_id = %s"
         params.append(student_id)
 
     query += " ORDER BY cs.session_date DESC"
 
-    print("DEBUG QUERY:", query)
-    print("DEBUG PARAMS:", params)
+    print("DEBUG:", query, params)
 
     cur.execute(query, params)
     records = cur.fetchall()
@@ -206,25 +203,32 @@ def course_attendance():
     present = sum(1 for r in records if r["status"] == "PRESENT")
     absent = total - present
 
-    # ---------------- STUDENT STATS ----------------
-    cur.execute("""
-        SELECT s.student_id, s.name,
-        COALESCE(
-            SUM(CASE WHEN a.status='PRESENT' THEN 1 ELSE 0 END) * 100.0 
-            / NULLIF(COUNT(*), 0),
-        0) AS percentage
-        FROM attendance a
-        JOIN student s ON a.student_id = s.student_id
-        JOIN class_session cs ON a.session_id = cs.session_id
-        WHERE cs.course_id = %s
-        GROUP BY s.student_id, s.name
-    """, (course_id,))
+    # ---------------- SIMPLE STUDENT STATS ----------------
+    # ✅ ONLY BASED ON FILTERED DATA (VERY IMPORTANT)
+    stats = {}
 
-    student_stats = cur.fetchall()
+    for r in records:
+        sid = r["student_id"]
+        if sid not in stats:
+            stats[sid] = {
+                "student_id": sid,
+                "name": r["name"],
+                "present": 0,
+                "total": 0
+            }
 
-    # ✅ FORCE FLOAT
-    for s in student_stats:
-        s["percentage"] = float(s["percentage"])
+        stats[sid]["total"] += 1
+        if r["status"] == "PRESENT":
+            stats[sid]["present"] += 1
+
+    student_stats = []
+    for s in stats.values():
+        percentage = (s["present"] / s["total"] * 100) if s["total"] > 0 else 0
+        student_stats.append({
+            "student_id": s["student_id"],
+            "name": s["name"],
+            "percentage": round(percentage, 2)
+        })
 
     conn.close()
 
