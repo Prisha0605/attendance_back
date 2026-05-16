@@ -1,0 +1,30 @@
+name: Monthly Attendance Email Job
+
+on:
+  schedule:
+    - cron: "0 9 1 * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run script
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BREVO_EMAIL: ${{ secrets.BREVO_EMAIL }}
+          BREVO_SMTP_LOGIN: ${{ secrets.BREVO_SMTP_LOGIN }}
+          BREVO_SMTP_PASSWORD: ${{ secrets.BREVO_SMTP_PASSWORD }}
+        run: python check_monthly_attendance.py
